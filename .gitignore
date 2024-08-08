@@ -1,0 +1,15 @@
+# Ignore everything
+*
+
+#Allowed folders
+!cmd
+
+# Allowed files
+!cmd/main.go
+!.gitignore
+!LICENSE
+!README.md
+!go.mod
+!go.sum
+!Dockerfile
+!docker-compose.yaml
