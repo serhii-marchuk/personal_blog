@@ -3,8 +3,11 @@
 
 #Allowed folders
 !cmd
+!.github
+!.github/workflows
 
 # Allowed files
+!.github/workflows/*.yml
 !cmd/main.go
 !.gitignore
 !LICENSE
