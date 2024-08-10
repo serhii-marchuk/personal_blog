@@ -1,0 +1,51 @@
+name: Build and push by PR
+
+on:
+  pull_request:
+    types: [ labeled ]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    if: github.event.pull_request.labels.*.name == 'deploy' || github.event_name == 'workflow_dispatch'
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Build the app
+        run: |
+          go mod tidy
+          go build -o myapp .
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GCR
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          echo "${GCP_CREDENTIALS}" | docker login -u _json_key --password-stdin https://gcr.io
+
+      - name: Build and push Docker image
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCR_REPOSITORY: ${{ github.event.inputs.gcr_repository }}
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})
+          IMAGE_NAME=gcr.io/${{ secrets.GCP_PROJECT_ID }}/blog-registry/blog:$SHORT_SHA
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+
+      - name: Output the image name
+        run: echo "Pushed Docker image $IMAGE_NAME"
