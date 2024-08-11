@@ -3,47 +3,55 @@ name: Build and push by PR
 on:
   pull_request:
     types: [ labeled ]
-
+  push:
   workflow_dispatch:
 
 jobs:
   build:
-    if: github.event.pull_request.labels.*.name == 'deploy' || github.event_name == 'workflow_dispatch'
+    if: (github.event.pull_request.labels.*.name == 'deploy'
+      || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'push')
+      && github.ref != 'refs/heads/main'
     name: Build Docker Image
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ github.ref }}
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
       - name: Build the app
         run: |
           go mod tidy
-          go build -o myapp .
+          go build -o ./app ./cmd/main.go
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: Log in to GCR
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_CREDENTIALS }}
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: 'Use gcloud CLI'
+        run: 'gcloud info'
+
+      - name: Configure Docker to use gcloud as a credential helper
         run: |
-          echo "${GCP_CREDENTIALS}" | docker login -u _json_key --password-stdin https://gcr.io
+          gcloud auth configure-docker europe-west10-docker.pkg.dev
 
       - name: Build and push Docker image
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCR_REPOSITORY: ${{ github.event.inputs.gcr_repository }}
         run: |
           SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})
-          IMAGE_NAME=gcr.io/${{ secrets.GCP_PROJECT_ID }}/blog-registry/blog:$SHORT_SHA
+          IMAGE_NAME=europe-west10-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/blog-registry/blog:$SHORT_SHA
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
