@@ -8,9 +8,10 @@ on:
 
 jobs:
   build:
-    if: github.event.pull_request.labels.*.name == 'deploy'
+    if: (github.event.pull_request.labels.*.name == 'deploy'
       || github.event_name == 'workflow_dispatch'
-      || github.event_name == 'push'
+      || github.event_name == 'push')
+      && github.ref != 'refs/heads/main'
     name: Build Docker Image
     runs-on: ubuntu-latest
 
