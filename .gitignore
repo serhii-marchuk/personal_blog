@@ -5,9 +5,11 @@
 !cmd
 !.github
 !.github/workflows
+!deploy
 
 # Allowed files
 !.github/workflows/*.yml
+!deploy/service.tmpl.yaml
 !cmd/main.go
 !.gitignore
 !LICENSE

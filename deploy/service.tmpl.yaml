@@ -1,0 +1,36 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${SERVICE_NAME}
+  namespace: ${PROJECT_NUMBER}
+  annotations:
+    run.googleapis.com/description: 'blog'
+    run.googleapis.com/ingress: 'internal-and-cloud-load-balancing'
+    run.googleapis.com/minScale: '0'
+spec:
+  template:
+    metadata:
+      name: ${REVISION_TAG}
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '1'
+    spec:
+      containerConcurrency: '20'
+      timeoutSeconds: 3
+      serviceAccountName: ${CLOUD_RUN_SA}
+      containers:
+        - image: ${CONTAINER_IMAGE}
+          name: 'blog'
+          ports:
+            - name: http1
+              containerPort: 80
+          resources:
+            limits:
+              cpu: '1'
+              memory: '512Mi'
+          startupProbe:
+            timeoutSeconds: 240
+            periodSeconds: 240
+            failureThreshold: 1
+            tcpSocket:
+              port: 80
