@@ -46,18 +46,42 @@ jobs:
       - name: Login to GAR
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.GCP_REPO }}
+          registry: ${{ secrets.GCP_REGION }}-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
 
-      - name: Build and push Docker image
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        run: |
-          SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})
-          IMAGE_NAME=${{ secrets.GCP_REPO }}/${{ secrets.GCP_PROJECT_ID }}/ar-blog/blog:$SHORT_SHA
-          docker build -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
+      - name: Set variable
+        id: vars
+        run: echo "SHORT_SHA=$(git rev-parse --short=7 ${{ github.sha }})" >> $GITHUB_ENV
+
+      - name: Build, tag and push container
+        id: build-image
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: |
+            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFAC_REPO }}/${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }}:${{ env.SHORT_SHA }}
 
       - name: Output the image name
-        run: echo "Pushed Docker image $IMAGE_NAME"
+        run: echo "Pushed Docker image ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFAC_REPO }}/${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }}:${{ env.SHORT_SHA }}"
+
+      - name: Create Service declaration
+        run: |-
+          export SERVICE_NAME="${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }}"
+          export PROJECT_NUMBER="${{ secrets.GCP_PROJECT_NUMBER }}"
+          export REVISION_TAG="${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }}-${{ env.SHORT_SHA }}"
+          export CLOUD_RUN_SA="${{ secrets.GCP_WIP_SA }}"
+          export CONTAINER_IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFAC_REPO }}/${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }}:${{ env.SHORT_SHA }}"
+          envsubst < ./deploy/service.tmpl.yaml > service.yaml
+          cat service.yaml
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }}
+          region: ${{ secrets.GCP_REGION }}
+          metadata: service.yaml
+
+      - name: Output the cloud run service
+        run: echo "Cloud run service ${{ secrets.GCP_CLOUD_RUN_SERVICE_NAME }} was deployed on revision tag ${{ env.SHORT_SHA }}"
